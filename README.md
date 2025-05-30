@@ -1,73 +1,80 @@
-# Welcome to your Lovable project
 
-## Project info
+# Multiplayer Pong Game
 
-**URL**: https://lovable.dev/projects/049bb6cf-09ac-44f2-9d92-7a21f03ceaeb
+A real-time multiplayer Pong game built with React, TypeScript, and Socket.IO.
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+- Real-time multiplayer gameplay
+- Smooth canvas-based graphics
+- Room-based matchmaking
+- Score tracking and win conditions
+- Responsive design
+- Modern UI with neon effects
 
-**Use Lovable**
+## Setup Instructions
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/049bb6cf-09ac-44f2-9d92-7a21f03ceaeb) and start prompting.
+### Frontend (React)
+The frontend is already configured and will run on the Lovable platform.
 
-Changes made via Lovable will be committed automatically to this repo.
+### Backend (Node.js Server)
+To run the backend server locally:
 
-**Use your preferred IDE**
+1. Navigate to the server directory:
+   ```bash
+   cd server
+   ```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+3. Start the server:
+   ```bash
+   npm run dev
+   ```
 
-Follow these steps:
+The server will run on `http://localhost:3001`.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## How to Play
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+1. Open the game in two browser windows/tabs
+2. Both players will be automatically matched
+3. Use Arrow Keys or W/S to control your paddle
+4. First player to reach 5 points wins!
 
-# Step 3: Install the necessary dependencies.
-npm i
+## Game Controls
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+- **Arrow Up** or **W**: Move paddle up
+- **Arrow Down** or **S**: Move paddle down
 
-**Edit a file directly in GitHub**
+## Technical Implementation
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Frontend
+- React with TypeScript
+- Socket.IO client for real-time communication
+- HTML5 Canvas for smooth game rendering
+- Tailwind CSS for modern styling
 
-**Use GitHub Codespaces**
+### Backend
+- Node.js with Express
+- Socket.IO for WebSocket communication
+- Real-time game physics and collision detection
+- Room management for player pairing
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Architecture
+- Client-server architecture with authoritative server
+- Real-time state synchronization
+- Event-driven programming model
+- Scalable room-based multiplayer system
 
-## What technologies are used for this project?
+## Game Mechanics
 
-This project is built with:
+- Ball physics with paddle collision effects
+- Paddle movement constraints
+- Scoring system with win conditions
+- Game state management across clients
+- Automatic game restart functionality
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/049bb6cf-09ac-44f2-9d92-7a21f03ceaeb) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+Enjoy playing Multiplayer Pong! 🏓
