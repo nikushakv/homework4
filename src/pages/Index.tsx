@@ -22,7 +22,7 @@ interface GameState {
 const SERVER_URL = "http://localhost:3001";
 
 const Index = () => {
-  const socketRef = useRef<Socket | null>(null); // Use ref for socket to avoid stale closures in event handlers if needed
+  const socketRef = useRef<Socket | null>(null);
   const [player, setPlayer] = useState<Player | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'waiting' | 'playing' | 'disconnected'>('connecting');
@@ -40,7 +40,6 @@ const Index = () => {
     const newSocket = io(SERVER_URL, {
         reconnectionAttempts: 3,
         timeout: 10000,
-        // transports: ['websocket'], // You can try forcing websockets if polling is an issue, but usually not needed for localhost
     });
     socketRef.current = newSocket;
 
@@ -52,11 +51,12 @@ const Index = () => {
     };
 
     const onConnectError = (err: Error) => {
-        console.error('CLIENT: Event "connect_error" - Message:', err.message, err);
-        setConnectionStatus('disconnected');
-        setErrorMessage(`Failed to connect: ${err.message}. Ensure server is running & refresh.`);
-        setShowRestartOptions(true);
-    };
+    console.error('CLIENT: Event "connect_error" - Message:', err.message, err);
+    setConnectionStatus('disconnected');
+    setErrorMessage(`Failed to connect: ${err.message}. Ensure server is running & refresh.`);
+    setShowRestartOptions(true);
+};
+
 
     const onPlayerAssigned = (assignedPlayer: Player) => {
       console.log('CLIENT: Event "playerAssigned" - Data:', assignedPlayer);
@@ -80,37 +80,34 @@ const Index = () => {
     };
 
     const onGameState = (newGameState: GameState) => {
-      // console.log('CLIENT: Event "gameState" - Data:', newGameState); // Noisy
       setGameState(newGameState);
       if (newGameState.gameActive && connectionStatus !== 'playing') {
-        // This check might be redundant if 'gameStart' always precedes active gameState
-        // console.log("CLIENT: gameState is active, ensuring connectionStatus is 'playing'");
         setConnectionStatus('playing');
       }
       if (!newGameState.gameActive && newGameState.winner) {
-        console.log("CLIENT: Game ended with winner. Setting showRestartOptions to true.");
-        // setConnectionStatus('playing'); // Keep as playing to show game board, GameUI handles winner display
         setShowRestartOptions(true);
       }
     };
 
     const onPlayerDisconnected = () => {
       console.log('CLIENT: Event "playerDisconnected" - Opponent left.');
-      setConnectionStatus('disconnected');
+      setConnectionStatus('disconnected'); 
       setErrorMessage('Opponent disconnected. The game has ended.');
       setShowRestartOptions(true);
-      // Keep current gameState to show final scores, but mark as inactive
       setGameState(prev => prev ? ({ ...prev, gameActive: false }) : null);
     };
 
     const onDisconnect = (reason: Socket.DisconnectReason) => {
       console.log('CLIENT: Event "disconnect" - Reason:', reason);
-      if (reason !== 'io client disconnect') { 
+      if (socketRef.current && reason === 'io client disconnect' && socketRef.current.id === newSocket.id) {
+        // Manual disconnect during cleanup, do not set error if it's the current socket
+        console.log("CLIENT: Manual disconnect during cleanup for socket:", newSocket.id)
+        setConnectionStatus('disconnected');
+      } else {
         setConnectionStatus('disconnected');
         setErrorMessage(`Lost connection: ${reason}. Please refresh.`);
         setShowRestartOptions(true);
-      } else {
-        setConnectionStatus('disconnected'); // Manual disconnect
+
       }
       setGameState(prev => prev ? ({ ...prev, gameActive: false }) : null);
     };
@@ -147,7 +144,7 @@ const Index = () => {
     window.addEventListener('keyup', handleKeyUp);
 
     const inputLoopId = setInterval(() => {
-      const currentSocket = socketRef.current; // Use the ref here
+      const currentSocket = socketRef.current;
       if (currentSocket && player && gameState && gameState.gameActive) {
         let direction = 0;
         if (player.isPlayer1) {
@@ -168,26 +165,37 @@ const Index = () => {
       window.removeEventListener('keyup', handleKeyUp);
       clearInterval(inputLoopId);
     };
-  }, [player, gameState]); // Socket itself is stable via ref, so not in deps here
+  }, [player, gameState]);
 
   const handleRestartOrFindNewGame = () => {
     const currentSocket = socketRef.current;
-    if (!currentSocket || currentSocket.disconnected || !player) {
-        console.log("CLIENT: Refreshing page to find new game / reconnect.");
+    // If socket is not connected or player info is missing, force a page refresh.
+    if (!currentSocket || !currentSocket.connected || !player) {
+        console.log("CLIENT: Socket not connected or player info missing. Refreshing page.");
         handleRefresh();
     } else if (player && gameState && !gameState.gameActive) { 
+        // If game is over (inactive) and player is connected, attempt to restart.
         console.log("CLIENT: Requesting to restart game...");
         currentSocket.emit('restartGame');
         setErrorMessage(undefined);
         setConnectionStatus('waiting'); 
         setShowRestartOptions(false); 
     } else {
-        console.log("CLIENT: Cannot restart/find new game. State:", { connectionStatus, playerExists: !!player, gameStateActive: gameState?.gameActive });
+        console.log("CLIENT: Cannot restart/find new game. Current state:", { 
+            connectionStatus, 
+            playerExists: !!player, 
+            gameStateExists: !!gameState,
+            isGameActive: gameState?.gameActive 
+        });
+        // Fallback to refresh if conditions for restart aren't met but button was somehow clicked.
+        handleRefresh();
     }
   };
 
-  // Conditional Rendering Logic
-  if (connectionStatus === 'connecting' && !errorMessage) {
+  // ---- CONDITIONAL RENDERING ----
+
+  // 1. Initial Connecting State (before player/gameState is set, no critical error)
+  if (connectionStatus === 'connecting' && !errorMessage && !player && !gameState) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
         <h1 className="text-4xl md:text-6xl font-bold text-center mb-8 bg-gradient-to-r from-cyan-400 to-purple-600 bg-clip-text text-transparent">Multiplayer Pong</h1>
@@ -196,29 +204,38 @@ const Index = () => {
     );
   }
   
-  if (connectionStatus === 'disconnected' || !socketRef.current?.connected) {
+  // 2. Disconnected State (explicitly 'disconnected' or socket object reports not connected)
+  //    This also catches initial connection errors handled by 'connect_error'.
+  if (connectionStatus === 'disconnected' || (socketRef.current && !socketRef.current.connected && !player && !gameState) ) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
         <h1 className="text-4xl md:text-6xl font-bold text-center mb-8 bg-gradient-to-r from-cyan-400 to-purple-600 bg-clip-text text-transparent">Multiplayer Pong</h1>
-        <ConnectionStatus status="disconnected" error={errorMessage || "Connection failed or lost."} />
+        <ConnectionStatus status="disconnected" error={errorMessage || "Connection failed or lost. Please try refreshing."} />
         <Button onClick={handleRefresh} className="mt-6 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded text-lg">
-            {errorMessage && errorMessage.toLowerCase().includes("failed to connect") ? "Retry Connection" : "Refresh Page"}
+            Refresh Page
         </Button>
       </div>
     );
   }
 
-  if (!player || !gameState) {
-     // This state means connected, but not yet assigned or no game state received
+  // 3. Connected, but waiting for player data or initial game state
+  if (!player || !gameState) { 
+    // At this point, status is likely 'connecting' (if server is slow) or 'waiting'
+    let waitingMessage = 'Setting up game...';
+    if (connectionStatus === 'waiting') {
+        waitingMessage = 'Waiting for opponent...';
+    } else if (connectionStatus === 'connecting') {
+        waitingMessage = 'Finalizing connection...';
+    }
     return (
       <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
         <h1 className="text-4xl md:text-6xl font-bold text-center mb-8 bg-gradient-to-r from-cyan-400 to-purple-600 bg-clip-text text-transparent">Multiplayer Pong</h1>
-        <ConnectionStatus status={connectionStatus} message={connectionStatus === 'waiting' ? 'Waiting for opponent...' : 'Setting up game...'} />
+        <ConnectionStatus status={connectionStatus === 'playing' ? 'waiting' : connectionStatus} message={waitingMessage} />
       </div>
     );
   }
 
-  // Main game screen
+  // 4. Main Game Screen (connected, player and gameState are available)
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-4xl mx-auto">
@@ -226,7 +243,8 @@ const Index = () => {
           <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-cyan-400 to-purple-600 bg-clip-text text-transparent">Multiplayer Pong</h1>
         </header>
         
-        {(connectionStatus === 'waiting' && gameState && !gameState.gameActive && !gameState.winner) && (
+        {/* Show "Waiting for game to start..." if game is not active yet, no winner, and status is waiting */}
+        {(connectionStatus === 'waiting' && !gameState.gameActive && !gameState.winner) && (
           <ConnectionStatus status="waiting" message="Waiting for game to start..." />
         )}
         
@@ -242,7 +260,7 @@ const Index = () => {
           player={player}
         />
         
-                <footer className="text-center mt-6 text-gray-400">
+        <footer className="text-center mt-6 text-gray-400">
           <p className="mb-1 text-sm md:text-base">
             You are Player {player.isPlayer1 ? '1 (Left Paddle - Cyan)' : '2 (Right Paddle - Purple)'}
           </p>
@@ -250,42 +268,33 @@ const Index = () => {
             Controls: {player.isPlayer1 ? 'W / S Keys' : 'Arrow Up / Down Keys'}
           </p>
           
-          {/* This block shows messages when the game is not active AND showRestartOptions is true */}
           {showRestartOptions && !gameState.gameActive && (
             <div className="mt-4">
               {(() => {
-                // At this point, we are in the main game render block, so connectionStatus is NOT 'disconnected'
-                // and likely not 'connecting' if player and gameState are available.
-                // It's most likely 'playing' (but game is inactive) or 'waiting'.
-
+                // By the time we are in this main render block, connectionStatus is NOT 'disconnected'.
+                // It's 'playing' (game ended) or 'waiting' (post-assignment, pre-start, or between games).
                 if (gameState.winner) {
-                  // GameUI shows "Play Again". This provides context.
                   return (
                     <p className="text-lg text-yellow-400">
                       Game Over! Click "Play Again" above to start a new match.
                     </p>
                   );
-                } else if (errorMessage && errorMessage.includes('Opponent disconnected')) {
-                  // This specific error message implies a disconnect handled by playerDisconnected event
-                  // which might have set connectionStatus to 'disconnected', but the main render
-                  // logic for disconnected state should have caught that.
-                  // This message is more for when that event specifically led to an inactive game.
+                } else if (errorMessage) { 
+                  // This handles cases like "Opponent disconnected" which set errorMessage
                   return (
                     <>
-                      <p className="text-lg text-yellow-400">{errorMessage}</p>
-                      <p className="text-md text-gray-300 mt-1">You can click "Play Again" above to find a new opponent.</p>
+                      <p className="text-lg text-red-400">{errorMessage}</p>
+                      {/* GameUI's "Play Again" button calls handleRestartOrFindNewGame which will lead to refresh if needed */}
+                      {errorMessage.includes('Opponent disconnected') && (
+                        <p className="text-md text-gray-300 mt-1">Click "Play Again" to find a new opponent.</p>
+                      )}
                     </>
                   );
-                } else if (errorMessage) {
-                  // Some other error occurred while the game became inactive
-                  return (
-                    <p className="text-lg text-red-400">{errorMessage}</p>
-                  );
                 } else {
-                  // No specific winner, no specific error message, but game is inactive.
+                  // No winner, no specific error message, but game is inactive.
                   return (
                     <p className="text-lg text-yellow-400">
-                      The game has ended or is paused.
+                      The game has ended or is paused. Waiting for options...
                     </p>
                   );
                 }
